@@ -6,6 +6,7 @@ https://github.com/matsuolab-edu/dl4us/blob/master/lesson4/lesson4_sec4_exercise
 
 # default
 import os
+from datetime import datetime
 
 # from pip
 from tensorflow.keras.models import Model
@@ -132,12 +133,13 @@ class Models():
 
 class Trainer():
     @staticmethod
-    def run(model, x_train, y_train):
+    def run(model, x_train, y_train, save_dir):
         train_target = np.hstack(
             (y_train[:, 1:], np.zeros((len(y_train), 1), dtype=np.int32)))
 
         model.fit([x_train, y_train], np.expand_dims(train_target, -1),
-                  batch_size=128, epochs=10, verbose=2, validation_split=0.2)
+                  batch_size=128, epochs=10, verbose=1, validation_split=0.2)
+        model.save(os.path.join(save_dir, 'model.h5'), include_optimizer=False)
 
 
 class Decoder():
@@ -174,19 +176,27 @@ class Decoder():
 
         # add
         detokenizer_predict[0] = "unk"
+        len_tests = range(len(x_test))
 
-        text_no = 0
-        input_seq = pad_sequences([x_test[text_no]], seqX_len, padding='post')
-        bos_eos = self.tokenizer_predict.texts_to_sequences(["<s>", "</s>"])
+        for test_idx in len_tests:
+            input_seq = pad_sequences([x_test[test_idx]], seqX_len, padding='post')
+            bos_eos = self.tokenizer_predict.texts_to_sequences(["<s>", "</s>"])
 
-        output_seq, attention_seq = self.decode_sequence(input_seq, bos_eos)
-
-        print('元の文:', ' '.join([detokenizer_train[i] for i in x_test[text_no]]))
-        print('生成文:', ' '.join([detokenizer_predict[i] for i in output_seq]))
-        print('正解文:', ' '.join([detokenizer_predict[i] for i in y_test[text_no]]))
+            output_seq, attention_seq = self.decode_sequence(input_seq, bos_eos)
+            print(f"test: {test_idx}")
+            print('元の文:', ' '.join([detokenizer_train[i] for i in x_test[test_idx]]))
+            print('生成文:', ' '.join([detokenizer_predict[i] for i in output_seq]))
+            print('正解文:', ' '.join([detokenizer_predict[i] for i in y_test[test_idx]]))
 
 
 def main():
+    time_stamp = datetime.now().strftime("%Y%m%d%_H%M%S")
+    MODEL_SAVE_DIR = os.path.join(BASE_PATH, "save", time_stamp)
+    if not os.path.isdir(MODEL_SAVE_DIR):
+        print(f">>> create model save directory...")
+        print(f">>> {MODEL_SAVE_DIR}...")
+        os.makedirs(MODEL_SAVE_DIR)
+
     print(f">>> loading data...")
     data = Data(train_data_path=os.path.join(BASE_PATH, "data", "train.en"),
                 predict_data_path=os.path.join(BASE_PATH, "data", "train.ja"))
@@ -196,7 +206,7 @@ def main():
                    train_vocab_size=data.train_vocab_size,
                    predict_vocab_size=data.predict_vocab_size)
     print(f">>> running train...")
-    Trainer.run(model.set_model(), data.x_train, data.y_train)
+    Trainer.run(model.set_model(), data.x_train, data.y_train, MODEL_SAVE_DIR)
     print(f">>> making models...")
     encoder_model, decoder_model, attention_model = model.generator()
     print(f">>> making decoder...")
